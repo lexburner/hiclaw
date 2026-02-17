@@ -57,44 +57,50 @@ make replay TASK="Create a Worker named alice for frontend development. Create i
 
 ## Multi-Agent Architecture: HiClaw vs OpenClaw Native
 
-HiClaw is built on top of [OpenClaw](https://github.com/nicepkg/openclaw) (the open-source agent framework). OpenClaw provides native multi-agent support through its `agents.list` and `bindings` configuration, where multiple agents run as isolated "brains" inside a single Gateway process. HiClaw takes a fundamentally different approach by deploying agents as independent containers coordinated via IM and a centralized gateway.
+HiClaw is built on [OpenClaw](https://github.com/nicepkg/openclaw) and extends it from a single-process multi-agent framework into a fully managed Agent Teams platform. The Manager Agent leverages the Higress AI Gateway to automate the entire multi-agent lifecycle -- from Worker creation and credential provisioning to task dispatch, progress monitoring, and skill evolution -- all through natural language conversation.
 
-| Dimension | OpenClaw Native | HiClaw |
+### 1. Deployment & Topology
+
+| | OpenClaw Native | HiClaw |
 |---|---|---|
-| **Deployment model** | Single process, multiple agents | Distributed containers (one per agent) |
-| **Agent topology** | Flat peers, routing by channel/account | Hierarchical Manager + Workers |
-| **Communication** | Internal message bus (`sessions_send/spawn`) | Matrix Rooms (human always present) |
-| **Human oversight** | Optional (humans interact via IM channels) | Built-in (human in every Room, full visibility) |
-| **LLM access** | Each agent configures its own model/API key | Unified AI Gateway (Higress) with per-agent auth |
-| **External tools** | Each agent holds its own credentials | Centralized MCP Server with credential isolation |
-| **State management** | Per-agent local directories + sessions | Centralized file system (MinIO) with stateless Workers |
-| **Scaling** | Vertical (more agents in one process) | Horizontal (add Worker containers, even cross-machine) |
-| **Fault isolation** | Shared process (one crash affects all) | Container-level isolation (Worker crash is self-contained) |
-| **Agent lifecycle** | Static config, restart to change | Dynamic creation/destruction at runtime by Manager |
-| **Skill management** | Per-agent workspace skills (manual file management) | Centralized skill distribution via MinIO, Manager-controlled per-Worker |
-| **Self-improvement** | No built-in mechanism | Manager reviews Worker performance, evolves team skills over time |
+| **Deployment** | Single process, all agents in one Gateway | Distributed containers, one per agent, cross-machine |
+| **Topology** | Flat peers, channel-based routing | Hierarchical Manager + Workers |
+| **Scaling & isolation** | Vertical; shared process, one crash affects all | Horizontal; container-level fault isolation |
 
-### Key Advantages of HiClaw
+### 2. Communication & Human Visibility
 
-- **Fully Automated Multi-Agent Lifecycle**: The Manager Agent handles the entire Worker lifecycle autonomously -- account registration, identity configuration (SOUL.md), gateway credential provisioning, skill assignment, task dispatch, and progress monitoring. In OpenClaw native mode, each of these steps requires manual configuration across multiple files and a process restart. HiClaw turns multi-agent orchestration from a manual config task into a conversational request: "Create a Worker named alice for frontend development."
+| | OpenClaw Native | HiClaw |
+|---|---|---|
+| **Channel** | Internal message bus | Matrix Rooms (IM protocol) |
+| **Human visibility** | Optional | **Built-in** -- human is in every Room |
+| **Agent-to-agent** | Opaque internal routing | All exchanges visible, searchable, interruptible |
 
-- **Self-Improving Agent Team**: HiClaw's design includes two built-in extension skills that make the team better over time:
-  - **Worker Experience Management**: After each task, the Manager reviews Worker performance, maintains per-Worker experience profiles with skill-level scoring, and uses this data to intelligently assign future tasks to the best-suited Worker.
-  - **Skill Evolution Management**: The Manager analyzes patterns across completed tasks, drafts new skills or skill improvements, submits them for human review, and validates them through simulated tasks -- creating a continuous improvement loop for the entire team's capabilities.
+Every Room contains Human + Manager + Worker. The human can intervene at any time -- guiding a Worker to improve task execution (feeding back into skill optimization), or coaching the Manager on better Worker management strategies (refining its management skills).
 
-  These mechanisms are impractical to replicate in OpenClaw's flat peer model, where there is no central coordinator to collect cross-agent performance data or manage skill evolution.
+### 3. LLM & MCP Credential Management
 
-- **Human-in-the-Loop by Design**: Every Matrix Room includes the human administrator alongside Manager and Worker. All task assignments, progress updates, and results are visible and interruptible in real-time -- no hidden agent-to-agent communication.
+| | OpenClaw Native | HiClaw |
+|---|---|---|
+| **LLM access** | Each agent holds its own API key | Unified AI Gateway with per-agent consumer tokens |
+| **Tool credentials** | Each agent holds real credentials | Centralized at gateway -- agents never see real credentials |
+| **Permission control** | Per-agent config | Manager grants/revokes MCP Server access per Worker |
+| **Rotation** | Manual edit + restart | Automated dual-credential sliding window, zero downtime |
 
-- **Distributed Fault Isolation**: Each agent runs in its own container. A Worker crash or hang does not affect the Manager or other Workers. Workers can be individually restarted, replaced, or migrated to different machines without downtime.
+Workers only hold their own consumer tokens. Even a compromised Worker cannot access upstream API credentials.
 
-- **Credential Isolation via Gateway**: External API credentials (GitHub PAT, GitLab tokens, etc.) are stored only in the Higress MCP Server configuration. Workers access these services through their own consumer key-auth tokens -- they never see the actual credentials. The Manager can grant or revoke tool access per-Worker at any time.
+### 4. Lifecycle & Skill Evolution Automation
 
-- **Stateless Workers**: All Worker configuration, task briefs, and results are stored in MinIO. Workers load everything from centralized storage on startup. Destroy a Worker and recreate it with the same name -- it resumes with full context.
+| | OpenClaw Native | HiClaw |
+|---|---|---|
+| **Agent creation** | Manual config + restart | Conversational: _"Create a Worker named alice for frontend dev"_ |
+| **Monitoring** | No cross-agent monitoring | Manager heartbeat in Rooms (human-visible) |
+| **Config updates** | Edit files + restart | Hot-reload, seconds to take effect |
+| **Self-improvement** | None | Manager reviews performance, evolves team skills |
 
-- **Dynamic Team Scaling**: The Manager can create new Workers on-demand based on task requirements (directly via Docker/Podman socket or by providing a `docker run` command). No need to restart the system or edit configuration files.
+The Manager handles the full Worker lifecycle autonomously: account registration, SOUL.md generation, credential provisioning, skill assignment, task dispatch, and heartbeat monitoring. Two built-in extension mechanisms drive continuous improvement:
 
-- **Unified Access Control**: Higress provides a single control plane for all resource access. The Manager controls which LLM routes, file system paths, and MCP Server tools each Worker can use -- all through consumer-level authorization at the gateway layer.
+- **Worker Experience Management**: per-Worker performance profiles with skill-level scoring, used for intelligent task assignment.
+- **Skill Evolution Management**: pattern recognition across tasks, new skill drafting, human review, and simulated task validation.
 
 ## Documentation
 
