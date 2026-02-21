@@ -1,10 +1,10 @@
 name: Build Images
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 env:
   REGISTRY: ghcr.io
@@ -18,6 +18,16 @@ jobs:
       packages: write
 
     steps:
+      - name: Free Up GitHub Actions Ubuntu Runner Disk Space 🔧
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -40,26 +50,24 @@ jobs:
         run: |
           SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-7)
           echo "sha_short=${SHA_SHORT}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=${SHA_SHORT}" >> $GITHUB_OUTPUT
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
 
-      # PR builds: single-arch (fast feedback, no push)
-      - name: Build images (PR - single arch, no push)
-        if: github.event_name == 'pull_request'
-        run: |
-          make build \
-            VERSION=${{ steps.meta.outputs.sha_short }} \
-            DOCKER_PLATFORM=linux/amd64
-
-      # Main branch: multi-arch build + push
-      - name: Build and push multi-arch images (main)
-        if: github.ref == 'refs/heads/main'
+      # Tag/manual: multi-arch build + push
+      - name: Build and push multi-arch images
         run: |
           make push \
-            VERSION=${{ steps.meta.outputs.sha_short }} \
+            VERSION=${{ steps.meta.outputs.version }} \
             REGISTRY=${{ env.REGISTRY }} \
             REPO=${{ env.REPO }}
 
-      - name: Tag latest on main
-        if: github.ref == 'refs/heads/main'
+      - name: Tag latest (on version tag)
+        if: steps.meta.outputs.is_tag == 'true'
         run: |
           make push \
             VERSION=latest \
@@ -72,10 +80,6 @@ jobs:
           WORKER_IMAGE: ${{ env.REGISTRY }}/${{ env.REPO }}/worker-agent
         run: |
           echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Manager: \`${MANAGER_IMAGE}:${{ steps.meta.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Worker: \`${WORKER_IMAGE}:${{ steps.meta.outputs.sha_short }}\`" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "- Platforms: \`linux/amd64, linux/arm64\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- Platforms: \`linux/amd64\` (PR build, no push)" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "- Manager: \`${MANAGER_IMAGE}:${{ steps.meta.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Worker: \`${WORKER_IMAGE}:${{ steps.meta.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Platforms: \`linux/amd64, linux/arm64\`" >> $GITHUB_STEP_SUMMARY

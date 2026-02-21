@@ -20,10 +20,10 @@
 
 VERSION        ?= latest
 REGISTRY       ?= higress-registry.cn-hangzhou.cr.aliyuncs.com
-REPO           ?= higress/hiclaw
+REPO           ?= higress
 
-MANAGER_IMAGE  ?= $(REGISTRY)/$(REPO)/manager-agent
-WORKER_IMAGE   ?= $(REGISTRY)/$(REPO)/worker-agent
+MANAGER_IMAGE  ?= $(REGISTRY)/$(REPO)/hiclaw-manager
+WORKER_IMAGE   ?= $(REGISTRY)/$(REPO)/hiclaw-worker
 
 MANAGER_TAG    ?= $(MANAGER_IMAGE):$(VERSION)
 WORKER_TAG     ?= $(WORKER_IMAGE):$(VERSION)
@@ -252,7 +252,10 @@ ifndef SKIP_BUILD
 	$(MAKE) build
 endif
 	@echo "==> Installing HiClaw Manager (non-interactive)..."
-	HICLAW_NON_INTERACTIVE=1 HICLAW_VERSION=$(VERSION) HICLAW_MOUNT_SOCKET=1 ./install/hiclaw-install.sh manager
+	HICLAW_NON_INTERACTIVE=1 HICLAW_VERSION=$(VERSION) HICLAW_MOUNT_SOCKET=1 \
+		HICLAW_INSTALL_MANAGER_IMAGE=$(LOCAL_MANAGER) \
+		HICLAW_INSTALL_WORKER_IMAGE=$(LOCAL_WORKER) \
+		./install/hiclaw-install.sh manager
 
 uninstall: ## Stop and remove Manager + all Worker containers
 	@echo "==> Uninstalling HiClaw..."

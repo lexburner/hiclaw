@@ -24,6 +24,9 @@
 #   HICLAW_DATA_DIR           Host directory for persistent data (default: docker volume)
 #   HICLAW_WORKSPACE_DIR      Host directory for manager workspace (default: ~/hiclaw-manager)
 #   HICLAW_VERSION            Image tag            (default: latest)
+#   HICLAW_REGISTRY           Image registry       (default: auto-detected by timezone)
+#   HICLAW_INSTALL_MANAGER_IMAGE  Override manager image (e.g., local build)
+#   HICLAW_INSTALL_WORKER_IMAGE   Override worker image  (e.g., local build)
 #   HICLAW_PORT_GATEWAY       Host port for Higress gateway (default: 8080)
 #   HICLAW_PORT_CONSOLE       Host port for Higress console (default: 8001)
 
@@ -31,9 +34,35 @@ set -e
 
 HICLAW_VERSION="${HICLAW_VERSION:-latest}"
 HICLAW_NON_INTERACTIVE="${HICLAW_NON_INTERACTIVE:-0}"
-MANAGER_IMAGE="hiclaw/manager-agent:${HICLAW_VERSION}"
-WORKER_IMAGE="hiclaw/worker-agent:${HICLAW_VERSION}"
 HICLAW_MOUNT_SOCKET="${HICLAW_MOUNT_SOCKET:-1}"
+
+# ============================================================
+# Registry selection based on timezone
+# ============================================================
+
+detect_registry() {
+    local tz
+    tz="$(cat /etc/timezone 2>/dev/null | tr -d '[:space:]' || \
+          timedatectl show --value -p Timezone 2>/dev/null || echo UTC)"
+
+    case "${tz}" in
+        America/*)
+            echo "higress-registry.us-west-1.cr.aliyuncs.com"
+            ;;
+        Asia/Singapore|Asia/Bangkok|Asia/Jakarta|Asia/Makassar|Asia/Jayapura|\
+        Asia/Kuala_Lumpur|Asia/Ho_Chi_Minh|Asia/Manila|Asia/Yangon|\
+        Asia/Vientiane|Asia/Phnom_Penh|Asia/Pontianak|Asia/Ujung_Pandang)
+            echo "higress-registry.ap-southeast-7.cr.aliyuncs.com"
+            ;;
+        *)
+            echo "higress-registry.cn-hangzhou.cr.aliyuncs.com"
+            ;;
+    esac
+}
+
+HICLAW_REGISTRY="${HICLAW_REGISTRY:-$(detect_registry)}"
+MANAGER_IMAGE="${HICLAW_INSTALL_MANAGER_IMAGE:-${HICLAW_REGISTRY}/higress/hiclaw-manager:${HICLAW_VERSION}}"
+WORKER_IMAGE="${HICLAW_INSTALL_WORKER_IMAGE:-${HICLAW_REGISTRY}/higress/hiclaw-worker:${HICLAW_VERSION}}"
 
 # ============================================================
 # Utility functions
@@ -143,6 +172,7 @@ detect_socket() {
 
 install_manager() {
     log "=== HiClaw Manager Installation ==="
+    log "Registry: ${HICLAW_REGISTRY}"
     log ""
 
     # LLM Configuration
@@ -264,7 +294,10 @@ HICLAW_REGISTRATION_TOKEN=${HICLAW_REGISTRATION_TOKEN}
 HICLAW_GITHUB_TOKEN=${HICLAW_GITHUB_TOKEN:-}
 
 # Worker image (for direct container creation)
-HICLAW_WORKER_IMAGE=hiclaw/worker-agent:${HICLAW_VERSION}
+HICLAW_WORKER_IMAGE=${WORKER_IMAGE}
+
+# Higress WASM plugin image registry (auto-selected by timezone)
+HIGRESS_ADMIN_WASM_PLUGIN_IMAGE_REGISTRY=${HICLAW_REGISTRY}
 
 # Host ports
 HICLAW_PORT_GATEWAY=${HICLAW_PORT_GATEWAY}
