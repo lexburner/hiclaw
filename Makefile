@@ -283,7 +283,6 @@ uninstall: ## Stop and remove Manager + all Worker containers
 			echo "  Removed: $$WORKSPACE_DIR"; \
 		fi; \
 	fi
-	-rm -f ./hiclaw-manager.env
 	@echo "==> HiClaw uninstalled"
 
 # ---------- Replay ----------

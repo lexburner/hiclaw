@@ -63,10 +63,10 @@ Both can see everything you say in either room.
 
 OpenClaw only wakes you when **you are explicitly @mentioned** in a group room. This means:
 
-- **You MUST @mention the Manager** (`@manager:${HICLAW_MATRIX_DOMAIN}`) whenever you report progress, complete a task, or need guidance — otherwise the Manager will not receive your message.
+- **You MUST @mention the Manager** (`@manager:${HICLAW_MATRIX_DOMAIN}`) in **every message you send in a group room**, without exception — including direct replies to the Manager's messages. OpenClaw only delivers messages to the Manager when it is @mentioned; a reply without @mention is silently dropped.
 - **The Manager will @mention you** when assigning tasks or asking for updates.
 - In your **Worker Room**, always @mention Manager when reporting.
-- In the **Project Room**, always @mention Manager when reporting. Use the format:
+- In the **Project Room**, always @mention Manager when reporting — including when replying to a Manager question mid-task. Use the format:
 
   ```
   @manager:DOMAIN task-{task-id} completed: <one-line summary of what was done>

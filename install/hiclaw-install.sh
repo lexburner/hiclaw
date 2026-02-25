@@ -19,7 +19,7 @@
 #   HICLAW_LLM_API_KEY        LLM API key         (required)
 #   HICLAW_ADMIN_USER         Admin username       (default: admin)
 #   HICLAW_ADMIN_PASSWORD     Admin password       (auto-generated if not set)
-#   HICLAW_MATRIX_DOMAIN      Matrix domain        (default: matrix-local.hiclaw.io:8080)
+#   HICLAW_MATRIX_DOMAIN      Matrix domain        (default: matrix-local.hiclaw.io:18080)
 #   HICLAW_MOUNT_SOCKET       Mount container runtime socket (default: 1)
 #   HICLAW_DATA_DIR           Host directory for persistent data (default: docker volume)
 #   HICLAW_WORKSPACE_DIR      Host directory for manager workspace (default: ~/hiclaw-manager)
@@ -27,8 +27,8 @@
 #   HICLAW_REGISTRY           Image registry       (default: auto-detected by timezone)
 #   HICLAW_INSTALL_MANAGER_IMAGE  Override manager image (e.g., local build)
 #   HICLAW_INSTALL_WORKER_IMAGE   Override worker image  (e.g., local build)
-#   HICLAW_PORT_GATEWAY       Host port for Higress gateway (default: 8080)
-#   HICLAW_PORT_CONSOLE       Host port for Higress console (default: 8001)
+#   HICLAW_PORT_GATEWAY       Host port for Higress gateway (default: 18080)
+#   HICLAW_PORT_CONSOLE       Host port for Higress console (default: 18001)
 
 set -e
 
@@ -175,6 +175,25 @@ install_manager() {
     log "Registry: ${HICLAW_REGISTRY}"
     log ""
 
+    # Load existing env file as fallback (shell env vars take priority)
+    local existing_env="${HICLAW_ENV_FILE:-./hiclaw-manager.env}"
+    if [ -f "${existing_env}" ]; then
+        log "Loading existing config from ${existing_env} (shell env vars take priority)..."
+        while IFS='=' read -r key value; do
+            # Skip comments and empty lines
+            [[ "${key}" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${key}" ]] && continue
+            # Strip inline comments and surrounding whitespace from value
+            value="${value%%#*}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            # Only set if not already set in the shell environment
+            if [ -z "${!key+x}" ]; then
+                export "${key}=${value}"
+            fi
+        done < "${existing_env}"
+    fi
+
     # LLM Configuration
     log "--- LLM Configuration ---"
     prompt HICLAW_LLM_PROVIDER "LLM Provider (e.g., qwen, openai)" "qwen"
@@ -200,8 +219,8 @@ install_manager() {
 
     # Port Configuration (must come before Domain so MATRIX_DOMAIN default uses the correct port)
     log "--- Port Configuration (press Enter for defaults) ---"
-    prompt HICLAW_PORT_GATEWAY "Host port for gateway (8080 inside container)" "8080"
-    prompt HICLAW_PORT_CONSOLE "Host port for Higress console (8001 inside container)" "8001"
+    prompt HICLAW_PORT_GATEWAY "Host port for gateway (8080 inside container)" "18080"
+    prompt HICLAW_PORT_CONSOLE "Host port for Higress console (8001 inside container)" "18001"
 
     log ""
 
@@ -303,10 +322,6 @@ HICLAW_WORKER_IMAGE=${WORKER_IMAGE}
 # Higress WASM plugin image registry (auto-selected by timezone)
 HIGRESS_ADMIN_WASM_PLUGIN_IMAGE_REGISTRY=${HICLAW_REGISTRY}
 
-# Host ports
-HICLAW_PORT_GATEWAY=${HICLAW_PORT_GATEWAY}
-HICLAW_PORT_CONSOLE=${HICLAW_PORT_CONSOLE}
-
 # Data persistence
 HICLAW_DATA_DIR=${HICLAW_DATA_DIR:-}
 # Manager workspace (skills, memory, state — host-editable)
@@ -353,11 +368,11 @@ EOF
     TZ_ARGS="-e TZ=${HOST_TZ}"
 
     # Host directory mount: for file sharing with agents (defaults to user's home)
-    if [ "${HICLAW_NON_INTERACTIVE}" != "1" ] && [ -z "${HICLAW_HOST_SHARE_DIR+x}" ]; then
+    if [ "${HICLAW_NON_INTERACTIVE}" != "1" ] && [ -z "${HICLAW_HOST_SHARE_DIR}" ]; then
         read -p "Host directory to share with agents (default: $HOME): " HICLAW_HOST_SHARE_DIR
         HICLAW_HOST_SHARE_DIR="${HICLAW_HOST_SHARE_DIR:-$HOME}"
         export HICLAW_HOST_SHARE_DIR
-    elif [ -z "${HICLAW_HOST_SHARE_DIR+x}" ]; then
+    elif [ -z "${HICLAW_HOST_SHARE_DIR}" ]; then
         HICLAW_HOST_SHARE_DIR="$HOME"
         export HICLAW_HOST_SHARE_DIR
     fi

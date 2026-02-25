@@ -66,7 +66,7 @@ higress_api() {
         else
             log "WARNING: ${desc} ... FAILED (HTTP ${http_code}): ${response}"
         fi
-    elif [ "${http_code}" = "200" ] || [ "${http_code}" = "201" ]; then
+    elif [ "${http_code}" = "200" ] || [ "${http_code}" = "201" ] || [ "${http_code}" = "204" ]; then
         log "${desc} ... OK (HTTP ${http_code})"
     else
         log "WARNING: ${desc} ... unexpected (HTTP ${http_code}): ${response}"

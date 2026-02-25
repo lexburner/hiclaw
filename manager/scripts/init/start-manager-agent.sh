@@ -255,7 +255,17 @@ esac
 export MODEL_REASONING=true
 log "Model: ${MODEL_NAME} (context=${MODEL_CONTEXT_WINDOW}, maxTokens=${MODEL_MAX_TOKENS}, reasoning=${MODEL_REASONING})"
 
-envsubst < /opt/hiclaw/configs/manager-openclaw.json.tmpl > ~/manager-workspace/openclaw.json
+if [ -f ~/manager-workspace/openclaw.json ]; then
+    log "Manager openclaw.json already exists, updating dynamic fields only (preserving user customizations)..."
+    jq --arg token "${MANAGER_TOKEN}" \
+       --arg key "${HICLAW_MANAGER_GATEWAY_KEY}" \
+       '.channels.matrix.accessToken = $token | .hooks.token = $key | .models.providers["hiclaw-gateway"].apiKey = $key' \
+       ~/manager-workspace/openclaw.json > /tmp/openclaw.json.tmp && \
+        mv /tmp/openclaw.json.tmp ~/manager-workspace/openclaw.json
+else
+    log "Manager openclaw.json not found, generating from template..."
+    envsubst < /opt/hiclaw/configs/manager-openclaw.json.tmpl > ~/manager-workspace/openclaw.json
+fi
 
 # ============================================================
 # Detect container runtime socket (for direct Worker creation)
