@@ -19,7 +19,7 @@
 #   HICLAW_ADMIN_PASSWORD     Admin password       (auto-generated if not set, min 8 chars)
 #   HICLAW_MATRIX_DOMAIN      Matrix domain        (default: matrix-local.hiclaw.io:18080)
 #   HICLAW_MOUNT_SOCKET       Mount container runtime socket (default: 1)
-#   HICLAW_DATA_DIR           Host directory for persistent data (default: docker volume)
+#   HICLAW_DATA_DIR           Docker volume name for persistent data (default: hiclaw-data)
 #   HICLAW_WORKSPACE_DIR      Host directory for manager workspace (default: ~/hiclaw-manager)
 #   HICLAW_VERSION            Image tag            (default: latest)
 #   HICLAW_REGISTRY           Image registry       (default: auto-detected by timezone)
@@ -799,16 +799,12 @@ install_manager() {
     # Data persistence
     log "--- Data Persistence ---"
     if [ "${HICLAW_NON_INTERACTIVE}" != "1" ] && [ -z "${HICLAW_DATA_DIR+x}" ]; then
-        read -p "External data directory (leave empty for Docker volume): " HICLAW_DATA_DIR
+        read -p "Docker volume name for persistent data [hiclaw-data]: " HICLAW_DATA_DIR
+        HICLAW_DATA_DIR="${HICLAW_DATA_DIR:-hiclaw-data}"
         export HICLAW_DATA_DIR
     fi
-    if [ -n "${HICLAW_DATA_DIR}" ]; then
-        HICLAW_DATA_DIR="$(cd "${HICLAW_DATA_DIR}" 2>/dev/null && pwd || echo "${HICLAW_DATA_DIR}")"
-        mkdir -p "${HICLAW_DATA_DIR}"
-        log "  Data directory: ${HICLAW_DATA_DIR}"
-    else
-        log "  Using Docker volume: hiclaw-data"
-    fi
+    HICLAW_DATA_DIR="${HICLAW_DATA_DIR:-hiclaw-data}"
+    log "  Using Docker volume: ${HICLAW_DATA_DIR}"
 
     # Manager workspace directory (skills, memory, state — host-editable)
     log "--- Manager Workspace ---"
@@ -882,7 +878,7 @@ HICLAW_WORKER_IMAGE=${WORKER_IMAGE}
 HIGRESS_ADMIN_WASM_PLUGIN_IMAGE_REGISTRY=${HICLAW_REGISTRY}
 
 # Data persistence
-HICLAW_DATA_DIR=${HICLAW_DATA_DIR:-}
+HICLAW_DATA_DIR=${HICLAW_DATA_DIR:-hiclaw-data}
 # Manager workspace (skills, memory, state — host-editable)
 HICLAW_WORKSPACE_DIR=${HICLAW_WORKSPACE_DIR:-}
 # Host directory sharing
@@ -911,12 +907,8 @@ EOF
         docker rm hiclaw-manager 2>/dev/null || true
     fi
 
-    # Data mount: external directory or Docker volume
-    if [ -n "${HICLAW_DATA_DIR}" ]; then
-        DATA_MOUNT_ARGS="-v ${HICLAW_DATA_DIR}:/data"
-    else
-        DATA_MOUNT_ARGS="-v hiclaw-data:/data"
-    fi
+    # Data mount: Docker volume
+    DATA_MOUNT_ARGS="-v ${HICLAW_DATA_DIR}:/data"
 
     # Manager workspace mount (always a host directory, defaulting to ~/hiclaw-manager)
     WORKSPACE_MOUNT_ARGS="-v ${HICLAW_WORKSPACE_DIR}:/root/manager-workspace"
@@ -1058,11 +1050,7 @@ EOF
     log "Tip: You can also ask the Manager to configure LLM providers for you in the chat."
     log ""
     log "Configuration file: ${ENV_FILE}"
-    if [ -n "${HICLAW_DATA_DIR}" ]; then
-        log "Data directory:     ${HICLAW_DATA_DIR}"
-    else
-        log "Data volume:        hiclaw-data (use HICLAW_DATA_DIR to persist externally)"
-    fi
+    log "Data volume:        ${HICLAW_DATA_DIR}"
     log "Manager workspace:  ${HICLAW_WORKSPACE_DIR}"
 }
 

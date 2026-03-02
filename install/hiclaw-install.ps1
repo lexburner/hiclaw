@@ -19,7 +19,7 @@
 #   HICLAW_ADMIN_PASSWORD     Admin password     (auto-generated if not set, min 8 chars)
 #   HICLAW_MATRIX_DOMAIN      Matrix domain      (default: matrix-local.hiclaw.io:18080)
 #   HICLAW_MOUNT_SOCKET       Mount container runtime socket (default: 1)
-#   HICLAW_DATA_DIR           Host directory for persistent data (default: docker volume)
+#   HICLAW_DATA_DIR           Docker volume name for persistent data (default: hiclaw-data)
 #   HICLAW_WORKSPACE_DIR      Host directory for manager workspace (default: ~/hiclaw-manager)
 #   HICLAW_VERSION            Image tag          (default: latest)
 #   HICLAW_REGISTRY           Image registry     (default: auto-detected by timezone)
@@ -27,6 +27,7 @@
 #   HICLAW_INSTALL_WORKER_IMAGE   Override worker image  (e.g., local build)
 #   HICLAW_PORT_GATEWAY       Host port for Higress gateway (default: 18080)
 #   HICLAW_PORT_CONSOLE       Host port for Higress console (default: 18001)
+#   HICLAW_PORT_ELEMENT_WEB   Host port for Element Web direct access (default: 18088)
 
 #Requires -Version 7.0
 
@@ -244,6 +245,7 @@ HICLAW_ADMIN_PASSWORD=$($Config.ADMIN_PASSWORD)
 # Ports
 HICLAW_PORT_GATEWAY=$($Config.PORT_GATEWAY)
 HICLAW_PORT_CONSOLE=$($Config.PORT_CONSOLE)
+HICLAW_PORT_ELEMENT_WEB=$($Config.PORT_ELEMENT_WEB)
 
 # Matrix
 HICLAW_MATRIX_DOMAIN=$($Config.MATRIX_DOMAIN)
@@ -926,6 +928,7 @@ function Install-Manager {
     Write-Log "--- Port Configuration (press Enter for defaults) ---"
     $config.PORT_GATEWAY = Read-Prompt -VarName "HICLAW_PORT_GATEWAY" -PromptText "Host port for gateway (8080 inside container)" -Default "18080"
     $config.PORT_CONSOLE = Read-Prompt -VarName "HICLAW_PORT_CONSOLE" -PromptText "Host port for Higress console (8001 inside container)" -Default "18001"
+    $config.PORT_ELEMENT_WEB = Read-Prompt -VarName "HICLAW_PORT_ELEMENT_WEB" -PromptText "Host port for Element Web direct access (8088 inside container)" -Default "18088"
 
     Write-Log ""
 
@@ -947,24 +950,16 @@ function Install-Manager {
     # Data Persistence
     Write-Log "--- Data Persistence ---"
     if (-not $script:HICLAW_NON_INTERACTIVE -and -not $env:HICLAW_DATA_DIR) {
-        $dataDirInput = Read-Host "External data directory (leave empty for Docker volume)"
-        if ($dataDirInput) {
-            $config.DATA_DIR = $dataDirInput
-        }
+        $dataDirInput = Read-Host "Docker volume name for persistent data [hiclaw-data]"
+        $config.DATA_DIR = if ($dataDirInput) { $dataDirInput } else { "hiclaw-data" }
     }
     elseif ($env:HICLAW_DATA_DIR) {
         $config.DATA_DIR = $env:HICLAW_DATA_DIR
     }
-
-    if ($config.DATA_DIR) {
-        if (-not (Test-Path $config.DATA_DIR)) {
-            New-Item -ItemType Directory -Path $config.DATA_DIR -Force | Out-Null
-        }
-        Write-Log "  Data directory: $($config.DATA_DIR)"
-    }
     else {
-        Write-Log "  Using Docker volume: hiclaw-data"
+        $config.DATA_DIR = "hiclaw-data"
     }
+    Write-Log "  Using Docker volume: $($config.DATA_DIR)"
 
     # Manager Workspace
     Write-Log "--- Manager Workspace ---"
@@ -1037,15 +1032,10 @@ function Install-Manager {
     # Port mappings
     $dockerArgs += @("-p", "$($config.PORT_GATEWAY):8080")
     $dockerArgs += @("-p", "$($config.PORT_CONSOLE):8001")
+    $dockerArgs += @("-p", "$($config.PORT_ELEMENT_WEB):8088")
 
-    # Data mount
-    if ($config.DATA_DIR) {
-        $dockerPath = ConvertTo-DockerPath -Path $config.DATA_DIR
-        $dockerArgs += @("-v", "${dockerPath}:/data")
-    }
-    else {
-        $dockerArgs += @("-v", "hiclaw-data:/data")
-    }
+    # Data mount: Docker volume
+    $dockerArgs += @("-v", "$($config.DATA_DIR):/data")
 
     # Workspace mount
     $wsDockerPath = ConvertTo-DockerPath -Path $config.WORKSPACE_DIR
@@ -1106,13 +1096,12 @@ function Install-Manager {
     Write-Log "  $($config.MATRIX_DOMAIN.Split(':')[0]) $($config.MATRIX_CLIENT_DOMAIN) $($config.AI_GATEWAY_DOMAIN) $($config.FS_DOMAIN)"
     Write-Log ""
 
-    $elementUrl = "http://$($config.MATRIX_CLIENT_DOMAIN):$($config.PORT_GATEWAY)/#/login"
     $lanIP = Get-LanIP
 
     Write-Host "`e[33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`e[0m"
     Write-Host "`e[33m  ★ Open the following URL in your browser to start:                           ★`e[0m"
     Write-Host "`e[33m                                                                                 `e[0m"
-    Write-Host "`e[1;36m    $elementUrl`e[0m"
+    Write-Host "`e[1;36m    http://127.0.0.1:$($config.PORT_ELEMENT_WEB)/#/login`e[0m"
     Write-Host "`e[33m                                                                                 `e[0m"
     Write-Host "`e[33m  Login with:`e[0m"
     Write-Host "`e[33m    Username: `e[1;32m$($config.ADMIN_USER)`e[0m"
@@ -1121,6 +1110,26 @@ function Install-Manager {
     Write-Host "`e[33m  After login, start chatting with the Manager!`e[0m"
     Write-Host "`e[33m    Tell it: `"Create a Worker named alice for frontend dev`"`e[0m"
     Write-Host "`e[33m    The Manager will handle everything automatically.`e[0m"
+    Write-Host "`e[33m                                                                                 `e[0m"
+    Write-Host "`e[33m  ─────────────────────────────────────────────────────────────────────────────  `e[0m"
+    Write-Host "`e[33m  🌐 LAN Browser access (other devices on the same network):                    `e[0m"
+    Write-Host "`e[33m                                                                                 `e[0m"
+    if ($lanIP) {
+        Write-Host "`e[33m    Open in browser: `e[1;36mhttp://${lanIP}:$($config.PORT_ELEMENT_WEB)/#/login`e[0m"
+        Write-Host "`e[33m    (Element Web served directly - no custom domain needed)                     `e[0m"
+        Write-Host "`e[33m    Login with:                                                                  `e[0m"
+        Write-Host "`e[33m      Username: `e[1;32m$($config.ADMIN_USER)`e[0m"
+        Write-Host "`e[33m      Password: `e[1;32m$($config.ADMIN_PASSWORD)`e[0m"
+        Write-Host "`e[33m    Homeserver: `e[1;36mhttp://${lanIP}:$($config.PORT_GATEWAY)`e[0m"
+    } else {
+        Write-Host "`e[33m    Open in browser: `e[1;36mhttp://<this-machine-LAN-IP>:$($config.PORT_ELEMENT_WEB)/#/login`e[0m"
+        Write-Host "`e[33m    (Element Web served directly - no custom domain needed)                     `e[0m"
+        Write-Host "`e[33m    Login with:                                                                  `e[0m"
+        Write-Host "`e[33m      Username: `e[1;32m$($config.ADMIN_USER)`e[0m"
+        Write-Host "`e[33m      Password: `e[1;32m$($config.ADMIN_PASSWORD)`e[0m"
+        Write-Host "`e[33m    Homeserver: `e[1;36mhttp://<this-machine-LAN-IP>:$($config.PORT_GATEWAY)`e[0m"
+        Write-Host "`e[33m    (Could not detect LAN IP - check with: ipconfig)                            `e[0m"
+    }
     Write-Host "`e[33m                                                                                 `e[0m"
     Write-Host "`e[33m  ─────────────────────────────────────────────────────────────────────────────  `e[0m"
     Write-Host "`e[33m  📱 Mobile access (FluffyChat / Element Mobile):                               `e[0m"
@@ -1155,12 +1164,7 @@ function Install-Manager {
     Write-Log ""
     Write-Log "Configuration file: $($script:HICLAW_ENV_FILE)"
 
-    if ($config.DATA_DIR) {
-        Write-Log "Data directory:     $($config.DATA_DIR)"
-    }
-    else {
-        Write-Log "Data volume:        hiclaw-data (use HICLAW_DATA_DIR to persist externally)"
-    }
+    Write-Log "Data volume:        $($config.DATA_DIR)"
 
     Write-Log "Manager workspace:  $($config.WORKSPACE_DIR)"
 }
