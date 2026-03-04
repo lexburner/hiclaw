@@ -218,6 +218,14 @@ make push VERSION=0.1.0 REGISTRY=ghcr.io REPO=higress-group/hiclaw
 make help  # All available targets
 ```
 
+## Community
+
+<p align="center">
+  <img src="https://img.alicdn.com/imgextra/i4/O1CN01vntwjP1Xr3okA9ASH_!!6000000002976-2-tps-939-1455.png" width="200" alt="WeChat Group" />
+  <br/>
+  <sub>WeChat Group — scan to join</sub>
+</p>
+
 ## License
 
 Apache License 2.0

@@ -218,6 +218,14 @@ make push VERSION=0.1.0 REGISTRY=ghcr.io REPO=higress-group/hiclaw
 make help  # 查看所有可用目标
 ```
 
+## 社区
+
+<p align="center">
+  <img src="https://img.alicdn.com/imgextra/i4/O1CN01vntwjP1Xr3okA9ASH_!!6000000002976-2-tps-939-1455.png" width="200" alt="微信群" />
+  <br/>
+  <sub>微信群——扫码加入</sub>
+</p>
+
 ## 许可证
 
 Apache License 2.0
