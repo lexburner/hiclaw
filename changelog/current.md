@@ -4,7 +4,31 @@ Record image-affecting changes to `manager/`, `worker/`, `openclaw-base/` here b
 
 ---
 
-本次更新主要包含四个方向：新增 model-switch、task-management 两个 skill 及 Manager/Worker TOOLS.md 快速参考手册，强化 Agent 工具使用规范；修复 `builtin-merge.sh` 多处 shell 陷阱（空内容 exit 1、写文件失败静默），确保启动失败可见；修复 Podman 兼容性、Tuwunel 就绪竞态、worker DM 权限等容器稳定性问题；Release workflow 改为开 PR 并支持手动输入版本号触发。
+**What's New**
+
+- Added model-switch and task-management skills to the Manager Agent, enabling runtime LLM model switching and structured task workflow management.
+- Added TOOLS.md quick-reference cheat sheets for both Manager and Worker, consolidating tool trigger rules, multi-worker collaboration requirements, and post-worker-creation onboarding guidance.
+- Release workflow now opens a PR instead of pushing directly to main, and supports manual trigger via `workflow_dispatch` with a version input.
+
+**Bug Fixes**
+
+- Fixed multiple shell traps in `builtin-merge.sh`: empty user content causing `set -e` exit, silent write/move failures now emit ERROR logs.
+- Fixed Podman compatibility (replaced hardcoded `docker` with runtime detection), `jq` unavailability inside container, and Tuwunel API readiness race condition on startup.
+- Fixed worker `openclaw.json` missing admin in `dm.allowFrom`, preventing admin from DMing workers directly.
+
+---
+
+**新增功能**
+
+- Manager Agent 新增 model-switch（运行时切换 LLM 模型）和 task-management（任务工作流与状态文件规范）两个 skill。
+- Manager 和 Worker 各新增 TOOLS.md 快速参考手册，集中整理工具触发规则、多 Worker 协作强制走 project-management 的规定，以及 Worker 创建后的 onboarding 提示。
+- Release workflow 改为开 PR 而非直接 push main，并支持通过 `workflow_dispatch` 手动输入版本号触发发布。
+
+**Bug 修复**
+
+- 修复 `builtin-merge.sh` 多处 shell 陷阱：空 user content 触发 `set -e` 退出、写文件/移动文件失败静默吞错，现在均会打出 ERROR 日志。
+- 修复 Podman 兼容性（硬编码 `docker` 改为运行时检测）、容器内 `jq` 不可用、Tuwunel API 就绪前 Manager 提前初始化的竞态问题。
+- 修复 worker `openclaw.json` 的 `dm.allowFrom` 未包含 admin 账号，导致 admin 无法直接 DM worker 的问题。
 
 - feat(manager): add model-switch skill with `update-manager-model.sh` script for runtime model switching ([00cbaa5](https://github.com/higress-group/hiclaw/commit/00cbaa5))
 - feat(manager): add task-management skill (extracted from AGENTS.md) covering task workflow and state file spec ([00cbaa5](https://github.com/higress-group/hiclaw/commit/00cbaa5))
