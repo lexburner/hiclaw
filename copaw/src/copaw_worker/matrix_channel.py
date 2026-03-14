@@ -59,8 +59,13 @@ CHANNEL_KEY = "matrix"
 
 # Known CoPaw slash commands — used to decide whether to strip @mention prefix
 _SLASH_COMMANDS = frozenset({
-    "message", "history", "compact_str", "compact", "new", "clear",
+    "message", "history", "compact_str", "compact", "new", "clear", "reset",
 })
+
+# Aliases: map alternative command names to their canonical form.
+_SLASH_ALIASES: dict[str, str] = {
+    "reset": "clear",
+}
 
 
 def _text_to_html(text: str) -> str:
@@ -356,24 +361,37 @@ class MatrixChannel(BaseChannel):
             return True
         return False
 
-    def _strip_mention_prefix(self, text: str) -> str:
+    def _strip_mention_prefix(self, text: str, room: Any = None) -> str:
         """Strip leading @mention prefix so slash commands can be detected.
 
-        Handles both MXID format (@user:server) and display name mentions.
-        E.g. ``"@worker:hs.example /new"`` → ``"/new"``.
+        Handles MXID format (@user:server), room display name, and localpart.
+        E.g. ``"@worker:hs.example /new"`` → ``"/new"``
+             ``"math 💕: /clear"`` → ``"/clear"``.
         """
         if not self._user_id:
             return text
         # 1. Strip MXID (@user:server) at start
         escaped = re.escape(self._user_id)
-        result = re.sub(rf"^{escaped}\s*", "", text, flags=re.IGNORECASE)
+        result = re.sub(rf"^{escaped}\s*:?\s*", "", text, flags=re.IGNORECASE)
         if result != text:
             return result.strip()
-        # 2. Strip display name (localpart without @) at start
+        # 2. Strip room display name (e.g. "math 💕") at start — try before
+        #    localpart so that "math 💕: /clear" is not partially matched by
+        #    the shorter localpart "math".
+        if room and self._user_id:
+            display_name = self._get_display_name(room, self._user_id)
+            if display_name and display_name != self._user_id:
+                result = re.sub(
+                    rf"^{re.escape(display_name)}\s*:?\s*", "", text, flags=re.IGNORECASE,
+                )
+                if result != text:
+                    return result.strip()
+        # 3. Strip localpart (e.g. "math") at start — only if display name
+        #    didn't match.
         localpart = self._user_id.split(":")[0].lstrip("@")
         if localpart:
             result = re.sub(
-                rf"^{re.escape(localpart)}\s*", "", text, flags=re.IGNORECASE,
+                rf"^{re.escape(localpart)}\s*:?\s*", "", text, flags=re.IGNORECASE,
             )
             if result != text:
                 return result.strip()
@@ -622,14 +640,20 @@ class MatrixChannel(BaseChannel):
         await self._send_read_receipt(room_id, event.event_id)
         await self._send_typing(room_id, True)
 
-        # Strip leading @mention so slash commands are detected in group rooms.
-        # Only strip for known CoPaw commands to avoid altering normal messages.
+        # Strip leading @mention so slash commands are detected regardless of
+        # room type (group or DM).  Only strip for known CoPaw commands to
+        # avoid altering normal messages.
         command_text = text
-        if not is_dm:
-            stripped = self._strip_mention_prefix(text)
-            cmd = stripped.lstrip("/").split()[0] if stripped.startswith("/") else ""
-            if cmd in _SLASH_COMMANDS:
-                command_text = stripped
+        stripped = self._strip_mention_prefix(text, room)
+        cmd = stripped.lstrip("/").split()[0] if stripped.startswith("/") else ""
+        if cmd in _SLASH_COMMANDS:
+            command_text = stripped
+            # Apply alias (e.g. /reset -> /clear)
+            if cmd in _SLASH_ALIASES:
+                canonical = _SLASH_ALIASES[cmd]
+                command_text = command_text.replace(f"/{cmd}", f"/{canonical}", 1)
+            if stripped != text:
+                logger.info("Stripped mention prefix for slash command: %r -> %r", text, command_text)
 
         # Build content parts, prepending accumulated history for group rooms
         content_parts: list[dict[str, Any]] = [{"type": "text", "text": command_text}]
